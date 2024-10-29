@@ -25,12 +25,14 @@ following statement:
     clog_create_module(MY_MODULE, LEVEL_DEBUG);
 
 You can define a unique logger for each file, by setting its name and message level:
-    clog_create_module(MY_MODULE, LEVEL_INFO);
+	
+	clog_create_module(MY_MODULE, LEVEL_INFO);
 
 By default logger uses standard console output using printf() function.
 You can override this by setting a custom function for console output by
 calling in main():
-   int clog_init_console(int (*fun)(const char *format, ...))
+
+	int clog_init_console(int (*fun)(const char *format, ...))
 
 Logger can also provide logging to a file.
 Define CLOG_FILE_SUPPORT to enable this feature and provide file path by calling:
@@ -39,8 +41,10 @@ In this case log file should be closed by:
  void clog_close_file(void)
 
 #define CLOG_DISABLED added before #include "clog.h" or globally will exclude logger's macros from compillation
-#define CLOG_TIME_SUPPORT added before #include "clog.h"  or globally will turn on timestamp support
-#define CLOG_FILE_SUPPORT added before #include "clog.h"  or globally will turn on log file support
+
+#define CLOG_TIME_SUPPORT added before #include "clog.h" or globally will turn on timestamp support
+
+#define CLOG_FILE_SUPPORT added before #include "clog.h" or globally will turn on log file support
 
 # 2. Examples
 
