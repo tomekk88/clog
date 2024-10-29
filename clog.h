@@ -582,7 +582,7 @@ extern "C" {
 *
 */
 #define clog_create_module(module, level) \
-clog_control_block_t clog_control_block_##module = \
+static clog_control_block_t clog_control_block_##module = \
 { \
     #module, \
     (level), \
