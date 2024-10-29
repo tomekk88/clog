@@ -48,6 +48,16 @@ In this case log file should be closed by:
 
 # 2. Examples
 
+## Sample log output
+
+	2024-10-29 18:29:29.247 D: MODULE_MAIN: main.c(175): main: Test debug
+	2024-10-29 18:29:29.247 I: MODULE_MAIN: main.c(176): main: Test info
+	2024-10-29 18:29:29.248 W: MODULE_MAIN: main.c(177): main: Test warn
+	2024-10-29 18:29:29.248 E: MODULE_MAIN: main.c(178): main: Test error
+	2024-10-29 18:29:29.248 E: MODULE_TEST: test.c(9): testFun: I'm here
+	2024-10-29 18:29:29.248 E: MODULE_TEST: test2.c(9): testFun2: ...and here too.
+
+
 ## Simple usage example in main()
 
 	#define CLOG_FILE_SUPPORT
