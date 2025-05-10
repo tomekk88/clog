@@ -33,7 +33,7 @@
  * By default logger uses standard console output using printf() function.
  * You can override this by setting a custom function for console output by
  * calling in main():
- *    int clog_init_console(int (*fun)(const char *format, ...))
+ *    int clog_init_console(int (*fun)(const char *format, ...), NULL, NULL)
  *
  * Logger can also provide logging to a file.
  * Define CLOG_FILE_SUPPORT to enable this feature and provide file path by calling:
@@ -41,6 +41,11 @@
  * In this case log file should be closed by:
  *  void clog_close_file(void)
  *
+ * By default logger uses no thread safe implementation.
+ * You can override this by setting a custom function for acquiring and releasing a guard semaphore
+ * calling in main():
+ *    int clog_init_console(int (*fun)(const char *format, ...), log_fun_sem_lock, log_fun_sem_unlock)
+ * 
  * #define CLOG_DISABLED added before #include "clog.h" or globally will exclude logger's macros from compillation
  * #define CLOG_TIME_SUPPORT added before #include "clog.h"  or globally will turn on timestamp support
  * #define CLOG_FILE_SUPPORT added before #include "clog.h"  or globally will turn on log file support
@@ -97,12 +102,47 @@
  *
  *  int main() {
  *
- *    clog_init_console(con_output);
+ *    clog_init_console(con_output, NULL, NULL);
  *    LOG_I(MY_MAIN, "Using custom console output");
 
  *    return 0;
  *  }
  *
+ *  #define CLOG_MAIN
+ *  #include <mutex>
+ *  #include "clog.h"
+ *
+ *  clog_create_module(MY_MAIN, LEVEL_DEBUG);
+ *
+ *  std::mutex g_logMtx;
+ *  void log_fun_sem_lock(void)
+ *  {
+ *  	g_logMtx.lock();
+ *  }
+ *
+ *  void log_fun_sem_unlock(void)
+ *  {
+ *  	g_logMtx.unlock();
+ *  }
+ *
+ *  int con_output(const char *format, ...)
+ *  {
+ *    int ret = 0;
+ *    va_list ap;
+ *
+ *    va_start(ap, format);
+ *    ret = serial_print(format, ap);
+ *    va_end(ap);
+ *    return ret;
+ *  }
+ *
+ *  int main() {
+ *
+ *    clog_init_console(con_output, log_fun_sem_lock, log_fun_sem_unlock);
+ *    LOG_I(MY_MAIN, "Using custom console output");
+
+ *    return 0;
+ *  }
  *
  *  #include "clog.h"
  *
@@ -181,6 +221,8 @@
 
 /* Default console output funciton */
 #define CLOG_DEFAULT_MESSAGE_FUNCTION printf
+#define CLOG_DEFAULT_LOCK_FUNCTION  NULL
+#define CLOG_DEFAULT_UNLOCK_FUNCTION  NULL
 
 #ifdef __cplusplus
 extern "C" {
@@ -228,11 +270,17 @@ extern "C" {
    *
    * @param fun
    * Function pointer for printing the message.
+   * * @param funSemLock
+   * Function pointer for locking the semaphore
+   * @param funSemUnLock
+   * Function pointer for unlocking the semaphore
    *
    * @return
    * Zero on success, non-zero on failure.
    */
-  int clog_init_console(int (*fun)(const char* format, ...));
+  int clog_init_console(int (*fun)(const char* format, ...),
+                        void (*funSemLock)(void),
+                        void (*funSemUnLock)(void));
 
   /*
    * No need to read below this point.
@@ -270,6 +318,10 @@ extern "C" {
 #endif /* CLOG_FILE_SUPPORT */
     /* Points to a function writing a message. */
     int (*fun)(const char* format, ...);
+    /* Points to a function acquiring a quard semaphore */
+    void (*funSemLock)(void);
+    /* Points to a function releasing a quard semaphore */
+    void (*funSemUnLock)(void);
 
     /* The format specifier. */
     char fmt[CLOG_FORMAT_LENGTH];
@@ -289,6 +341,8 @@ extern "C" {
     0,
 #endif /* CLOG_FILE_SUPPORT */
     CLOG_DEFAULT_MESSAGE_FUNCTION,
+    CLOG_DEFAULT_LOCK_FUNCTION,
+    CLOG_DEFAULT_UNLOCK_FUNCTION,
     CLOG_DEFAULT_FORMAT,
     CLOG_DEFAULT_DATE_FORMAT,
     CLOG_DEFAULT_TIME_FORMAT
@@ -325,7 +379,9 @@ extern "C" {
   }
 
 
-  int clog_init_console(int (*fun)(const char* format, ...))
+  int clog_init_console(int (*fun)(const char* format, ...),
+                        void (*funSemLock)(void),
+                        void (*funSemUnLock)(void))
   {
     if (fun == NULL)
     {
@@ -336,6 +392,9 @@ extern "C" {
     _clog_logger.fd = 0;
 #endif /* CLOG_FILE_SUPPORT */
     _clog_logger.fun = fun;
+    _clog_logger.funSemLock = funSemLock;
+    _clog_logger.funSemUnLock = funSemUnLock;
+
     return 0;
   }
 
@@ -499,6 +558,8 @@ extern "C" {
     int result;
     struct clog* logger = &_clog_logger;
 
+    if (logger->funSemLock) logger->funSemLock();
+
     /* Format the message text with the argument list. */
     va_start(ap, fmt);
     result = vsnprintf(dynbuf, buf_size, fmt, ap);
@@ -511,6 +572,7 @@ extern "C" {
         _clog_err("Formatting failed (1).\n");
         va_end(ap);
         free(dynbuf);
+        if (logger->funSemUnLock) logger->funSemUnLock();
         return;
       }
     }
@@ -526,6 +588,7 @@ extern "C" {
         if (dynbuf != buf) {
           free(dynbuf);
         }
+        if (logger->funSemUnLock) logger->funSemUnLock();
         return;
       }
 
@@ -551,6 +614,8 @@ extern "C" {
         free(dynbuf);
       }
     }
+
+    if (logger->funSemUnLock) logger->funSemUnLock();
   }
 
   void  _clog_err(const char* fmt, ...)
@@ -652,7 +717,7 @@ do { \
 
 #define clog_init_file(path)
 #define clog_close_file()
-#define clog_init_console(fun)
+#define clog_init_console(fun, funSemLock, funSemUnlock)
 #define clog_create_module(module, level)
 #define LOG_D(module, ...)
 #define LOG_I(module, ...)
