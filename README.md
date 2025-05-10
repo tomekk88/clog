@@ -3,6 +3,7 @@ Simple logger for C
 
 Features:
 - Implemented purely as a single header file.
+- Thread safe.
 - Five log levels (none, debug, info, warn, error).
 - Custom formats.
 - Fast.
@@ -32,7 +33,9 @@ By default logger uses standard console output using printf() function.
 You can override this by setting a custom function for console output by
 calling in main():
 
-	int clog_init_console(int (*fun)(const char *format, ...))
+	int clog_init_console(int (*fun)(const char* format, ...),
+                        void (*funSemLock)(void),
+                        void (*funSemUnLock)(void));
 
 Logger can also provide logging to a file.
 Define CLOG_FILE_SUPPORT to enable this feature and provide file path by calling:
@@ -113,11 +116,28 @@ In this case log file should be closed by:
 
 	 int main() {
 
-	   clog_init_console(con_output);
+	   clog_init_console(con_output, NULL, NULL);
 	   LOG_I(MY_MAIN, "Using custom console output");
 
 	   return 0;
 	 }
+
+## Adding thread safety
+
+	std::mutex g_logMtx;
+
+	void log_fun_sem_lock(void)
+	{
+		g_logMtx.lock();
+	}
+
+	void log_fun_sem_unlock(void)
+	{
+		g_logMtx.unlock();
+	}
+
+	clog_init_console(_cprintf, log_fun_sem_lock, log_fun_sem_unlock);
+
 
 ## Simple example of usage in regular files
 
